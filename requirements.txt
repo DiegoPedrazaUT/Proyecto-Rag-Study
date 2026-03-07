@@ -6,6 +6,6 @@ pydantic-settings
 langchain
 langchain-community
 langchain-google-genai
-faiss-cpu
-pypdf
 langchain-text-splitters
+psycopg2-binary
+langchain-postgres
