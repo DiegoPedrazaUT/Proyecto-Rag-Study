@@ -32,9 +32,10 @@ def ask_chatbot(request: ChatRequest, current_user: dict = Depends(get_current_u
 
       
         session_id = current_user["user_id"]
+        nombre_usuario = current_user.get("user_name", "Estudiante")
 
         respuesta = rag_chain.invoke(
-            {"input": request.pregunta},
+            {"input": request.pregunta, "user_name": nombre_usuario},
             config={"configurable": {"session_id": session_id}}
         )
 

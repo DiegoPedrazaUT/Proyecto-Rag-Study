@@ -16,6 +16,7 @@ def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(securit
         
         user_id: str = payload.get("sub")
         role: str = payload.get("role")
+        user_name: str = payload.get("user_name", "Estudiante")
         
         if user_id is None:
             raise HTTPException(
@@ -23,7 +24,7 @@ def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(securit
                 detail="El token no contiene un identificador válido"
             )
             
-        return {"user_id": user_id, "role": role}
+        return {"user_id": user_id, "role": role, "user_name": user_name}
         
     except JWTError:
         raise HTTPException(
