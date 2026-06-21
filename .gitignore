@@ -1,5 +1,15 @@
-.env
-venv/
-__pycache__/
-talleres_ut.pdf
-Actividades extracurriculares.pdf
+# Entornos virtuales de Python
+**/venv/
+**/.venv/
+**/env/
+**/__pycache__/
+**/*.pyc
+
+# Archivos de configuración 
+**/.env
+**/.env.local
+**/.env.*.local
+
+# Archivos pesados o PDFs locales de prueba
+**/*.pdf
+**/*.docx
