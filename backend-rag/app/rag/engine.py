@@ -18,8 +18,9 @@ llm = ChatGoogleGenerativeAI(
 )
 
 embeddings = GoogleGenerativeAIEmbeddings(
-    model="models/gemini-embedding-001",
-    google_api_key=settings.GOOGLE_API_KEY
+    model="gemini-embedding-2",
+    google_api_key=settings.GOOGLE_API_KEY,
+    output_dimensionality=768
 )
 
 # ==========================================

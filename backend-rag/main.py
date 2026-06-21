@@ -2,11 +2,12 @@ import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
-
+from app.api.documents import router as docs_router
 from app.api.routes import router as chat_router 
+from app.api.rag import router as rag_router
 
 app = FastAPI(
-    title="Chatbot RAG Microservice - UT Cancún",
+    title="Proyecto-Rag-Study",
     description="Microservicio de IA con Gemini y LangChain",
     version="1.0.0"
 )
@@ -21,7 +22,8 @@ app.add_middleware(
 )
 
 app.include_router(chat_router)
-
+app.include_router(docs_router)
+app.include_router(rag_router)
 @app.get("/")
 async def root():
     return {"message": "Microservicio RAG conectado y listo para usar Gemini 🤖"}
