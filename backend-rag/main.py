@@ -12,7 +12,7 @@ app = FastAPI(
     version="1.0.0"
 )
 
-# CORS para que tu Nata te puedas comunicar
+# CORS para los de Front (ponganse a trabajar)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],

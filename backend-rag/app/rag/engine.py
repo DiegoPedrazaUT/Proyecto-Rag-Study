@@ -1,18 +1,21 @@
 from langchain_google_genai import ChatGoogleGenerativeAI, GoogleGenerativeAIEmbeddings
-from langchain_postgres import PGVector
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.runnables import RunnablePassthrough
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.runnables.history import RunnableWithMessageHistory
 from langchain_community.chat_message_histories import ChatMessageHistory
 from langchain_core.chat_history import BaseChatMessageHistory
+from supabase import create_client, Client
 from app.core.config import settings
 
-# ==========================================
-# 1. CONFIGURACIÓN DE MODELOS
-# ==========================================
+# 1. Inicializamos conexión a Supabase
+supabase: Client = create_client(settings.SUPABASE_URL, settings.SUPABASE_KEY)
+
+# ============================
+# 1. CONFIGURACIÓN DE MODELOS 
+# ============================
 llm = ChatGoogleGenerativeAI(
-    model="gemini-3-flash-preview",
+    model="gemini-3-flash-preview", # Conservamos tu modelo elegido
     google_api_key=settings.GOOGLE_API_KEY,
     temperature=0.3 
 )
@@ -23,20 +26,21 @@ embeddings = GoogleGenerativeAIEmbeddings(
     output_dimensionality=768
 )
 
-# ==========================================
-# 2. PROMPT DEL SISTEMA (¡Ahora con Memoria!)
-# ==========================================
-system_prompt = """Eres el asistente virtual oficial de actividades extracurriculares de la UT Cancún.
-Tu objetivo es ayudar a los estudiantes a encontrar información sobre talleres, deportes y eventos.
+# ======================
+# 2. PROMPT DEL SISTEMA 
+# ======================
+system_prompt = """Eres un tutor virtual experto de la Universidad Tecnológica (UT).
+Tu objetivo es ayudar a los estudiantes a estudiar y comprender sus apuntes.
 
 Estás hablando con el estudiante: {user_name}.
-Dirígete a él/ella por su nombre de forma amable, natural y conversacional.
+Dirígete a él/ella por su nombre de forma amable y natural.
 
-Usa ÚNICAMENTE el siguiente contexto para responder a la pregunta. 
-Si la respuesta no está en el contexto, di: "Lo siento, no tengo esa información sobre las actividades extracurriculares." No inventes respuestas.
+RESPONDE ÚNICAMENTE BASÁNDOTE EN EL SIGUIENTE CONTEXTO EXTRAÍDO DE LOS APUNTES.
+Si la respuesta no está en el contexto, di: "Lo siento, no encuentro esto en tus apuntes de esta sesión."
 
-Contexto:
-{context}"""
+CONTEXTO DE LOS APUNTES:
+{context}
+"""
 
 prompt = ChatPromptTemplate.from_messages([
     ("system", system_prompt),
@@ -44,10 +48,9 @@ prompt = ChatPromptTemplate.from_messages([
     ("human", "{input}")
 ])
 
-# ==========================================
-# 3. ALMACÉN DE MEMORIA TEMPORAL
-# ==========================================
-# Este diccionario guardará el historial. La "llave" será el user_id del alumno.
+# ===============================
+# 3. ALMACÉN DE MEMORIA TEMPORAL 
+# ===============================
 store = {}
 
 def get_session_history(session_id: str) -> BaseChatMessageHistory:
@@ -56,35 +59,63 @@ def get_session_history(session_id: str) -> BaseChatMessageHistory:
     return store[session_id]
 
 # ==========================================
-# 4. MOTOR RAG (Enuelto en memoria)
+# 4. MOTOR RAG: El Nuevo Retriever Dinámico
 # ==========================================
-def format_docs(docs):
-    return "\n\n".join(doc.page_content for doc in docs)
+def get_context_for_session(input_data: dict) -> str:
+    """Reemplaza a PGVector. Busca solo en los PDFs de la sesión actual."""
+    question = input_data["input"]
+    session_id = input_data["session_id"]
+    
+    # A. Saber qué PDFs pertenecen a este chat
+    docs_res = supabase.table("rag_session_documents").select("document_id").eq("session_id", session_id).execute()
+    if not docs_res.data:
+        return "No hay documentos vinculados a esta sesión."
+        
+    document_ids = [row["document_id"] for row in docs_res.data]
+    
+    # B. Convertir la pregunta a matemáticas
+    query_vector = embeddings.embed_query(question)
+    
+    # C. Usar la función rápida de Supabase para buscar similitud
+    response = supabase.rpc(
+        "match_document_chunks",
+        {
+            "query_embedding": query_vector,
+            "match_threshold": 0.3,
+            "match_count": 3,
+            "filter_document_ids": document_ids
+        }
+    ).execute()
+    
+    if not response.data:
+        return "No se encontró información relevante en los apuntes."
+        
+    # D. Devolver el texto formateado
+    return "\n\n".join([chunk["content"] for chunk in response.data])
 
+# ==========================================
+# 5. CONSTRUCCIÓN DE LA CADENA (LCEL)
+# ==========================================
 def get_rag_chain():
-    vectorstore = PGVector(
-        embeddings=embeddings,
-        collection_name="extracurriculares_ut",
-        connection=settings.DATABASE_URL,
-        use_jsonb=True,
-    )
-
-    retriever = vectorstore.as_retriever(search_kwargs={"k": 3})
-
+    # Asignamos el contexto usando nuestra nueva función
     qa_chain = (
         RunnablePassthrough.assign(
-            context=(lambda x: x["input"]) | retriever | format_docs
+            context=get_context_for_session
         )
         | prompt
         | llm
         | StrOutputParser() 
     )
 
-    conversational_rag_chain = RunnableWithMessageHistory(
+    # Le envolvemos tu memoria
+    rag_with_history = RunnableWithMessageHistory(
         qa_chain,
         get_session_history,
         input_messages_key="input",
         history_messages_key="chat_history",
+        history_factory_config=[
+            {"id": "session_id", "annotation": str},
+        ]
     )
-
-    return conversational_rag_chain
+    
+    return rag_with_history

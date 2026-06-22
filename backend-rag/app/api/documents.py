@@ -1,4 +1,3 @@
-# app/api/documents.py
 import os
 import tempfile
 from fastapi import APIRouter, Depends, UploadFile, File, HTTPException
@@ -82,7 +81,6 @@ async def upload_and_process_document(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error en el motor de ingesta: {str(e)}")
     
-    # Agrega esto al final de app/api/documents.py
 
 @router.get("/")
 async def get_documents(current_user: dict = Depends(get_current_user)):
@@ -90,7 +88,6 @@ async def get_documents(current_user: dict = Depends(get_current_user)):
     user_id = current_user["user_id"]
     
     try:
-        # Consultamos a Supabase todos los documentos de este usuario
         response = supabase.table("documents").select("*").eq("user_id", user_id).execute()
         
         return {
@@ -115,9 +112,6 @@ async def delete_document(document_id: str, current_user: dict = Depends(get_cur
             
         # 2. Procedemos a eliminarlo
         supabase.table("documents").delete().eq("id", document_id).execute()
-        
-        # ¡Magia! No necesitamos hacer un delete en "document_chunks" ni en "flashcards"
-        # porque le pusimos ON DELETE CASCADE en el script SQL. La base de datos limpia la basura sola.
 
         return {"message": "Documento y vectores eliminados correctamente."}
         
