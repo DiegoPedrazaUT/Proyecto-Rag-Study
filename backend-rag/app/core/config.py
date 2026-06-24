@@ -1,3 +1,4 @@
+# app/core/config.py
 import os
 from dotenv import load_dotenv
 from pydantic_settings import BaseSettings
@@ -9,6 +10,10 @@ class Settings(BaseSettings):
     SECRET_KEY: str = os.getenv("SECRET_KEY") or ""
     ALGORITHM: str = os.getenv("ALGORITHM", "HS256")
     GOOGLE_API_KEY: str = os.getenv("GOOGLE_API_KEY") or ""
+    
+    # ¡NUEVOS! Para conectarnos directamente a las tablas
+    SUPABASE_URL: str = os.getenv("SUPABASE_URL") or ""
+    SUPABASE_KEY: str = os.getenv("SUPABASE_KEY") or ""
 
     class Config:
         env_file = ".env"

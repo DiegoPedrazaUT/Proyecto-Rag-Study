@@ -1,10 +1,14 @@
 import uuid
+from datetime import datetime, timezone
 from sqlalchemy import Boolean, Column, Integer, String, Text, SmallInteger, DateTime, ForeignKey, Numeric, Table
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from pgvector.sqlalchemy import Vector 
 from database.database import Base
+
+def get_utc_now():
+    return datetime.now(timezone.utc)
 
 # ==========================================
 # 1. CATÁLOGOS
