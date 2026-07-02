@@ -7,6 +7,9 @@ from uuid import UUID
 # 1. ESQUEMAS DE REGISTRO
 # ==========================================
 
+PASSWORD_REGEX = r"^(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{12,}$"
+PASSWORD_ERROR_MSG = 'La contraseña debe incluir al menos 12 caracteres, una mayúscula, un número y un símbolo especial.'
+
 class UserRegisterBase(BaseModel):
     first_name: str = Field(..., min_length=2, description="Primer nombre del usuario")
     last_name: str = Field(..., min_length=2, description="Apellidos del usuario")
@@ -17,9 +20,8 @@ class UserRegisterBase(BaseModel):
     @field_validator('password')
     @classmethod
     def validate_password_strength(cls, v: str) -> str:
-        pattern = r"^(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{12,}$"
-        if not re.match(pattern, v):
-            raise ValueError('La contraseña debe incluir al menos 12 caracteres, una mayúscula, un número y un símbolo especial.')
+        if not re.match(PASSWORD_REGEX, v):
+            raise ValueError(PASSWORD_ERROR_MSG)
         return v
 
 class StudentRegisterRequest(UserRegisterBase):
@@ -90,9 +92,8 @@ class ResetPasswordRequest(BaseModel):
     @field_validator('new_password')
     @classmethod
     def validate_password_strength(cls, v: str) -> str:
-        pattern = r"^(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{12,}$"
-        if not re.match(pattern, v):
-            raise ValueError('Contraseña débil: requiere mayúscula, número y símbolo.')
+        if not re.match(PASSWORD_REGEX, v):
+            raise ValueError(PASSWORD_ERROR_MSG)
         return v
 
 class ChangePasswordRequest(BaseModel):
@@ -102,9 +103,8 @@ class ChangePasswordRequest(BaseModel):
     @field_validator('new_password')
     @classmethod
     def validate_password_strength(cls, v: str) -> str:
-        pattern = r"^(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{12,}$"
-        if not re.match(pattern, v):
-            raise ValueError('La contraseña debe incluir al menos 12 caracteres, una mayúscula, un número y un símbolo especial.')
+        if not re.match(PASSWORD_REGEX, v):
+            raise ValueError(PASSWORD_ERROR_MSG)
         return v
 
 class ResendVerificationRequest(BaseModel):

@@ -1,6 +1,7 @@
 import secrets
 from datetime import datetime, timedelta, timezone
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import IntegrityError
 from fastapi import HTTPException, BackgroundTasks
 from api import schemas
 from core.security import get_password_hash
@@ -43,9 +44,13 @@ def register_student(db: Session, user_data: schemas.StudentRegisterRequest, bac
         new_user = UserRepository.create_student(db, base_user_data, profile_data)
         background_tasks.add_task(send_verification_email, to_email=new_user.email, token=token) # type: ignore
         return new_user
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status_code=400, detail="El correo o la matrícula ya se encuentran registrados.")
     except Exception as e:
         db.rollback()
-        raise HTTPException(status_code=400, detail=str(e))
+        # Nunca devolver str(e) al cliente en producción
+        raise HTTPException(status_code=500, detail="Error interno del servidor al crear el usuario.")
 
 def register_teacher(db: Session, user_data: schemas.TeacherRegisterRequest, background_tasks: BackgroundTasks):
     if UserRepository.get_by_email(db, user_data.email):
@@ -78,9 +83,13 @@ def register_teacher(db: Session, user_data: schemas.TeacherRegisterRequest, bac
     }
 
     try:
-        new_user = UserRepository.create_teacher(db, base_user_data, profile_data)
+        new_user = UserRepository.create_student(db, base_user_data, profile_data)
         background_tasks.add_task(send_verification_email, to_email=new_user.email, token=token) # type: ignore
         return new_user
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status_code=400, detail="El correo o la matrícula ya se encuentran registrados.")
     except Exception as e:
         db.rollback()
-        raise HTTPException(status_code=400, detail=str(e))
+        # Nunca devolver str(e) al cliente en producción
+        raise HTTPException(status_code=500, detail="Error interno del servidor al crear el usuario.")

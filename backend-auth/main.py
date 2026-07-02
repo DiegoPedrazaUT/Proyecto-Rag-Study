@@ -29,8 +29,7 @@ origins = [
     "http://localhost:3000",
     "http://localhost:5173",
     "https://front-ut-extracurricular-production.up.railway.app",
-    "https://api-getway-utextracurricular-production.up.railway.app",
-    "*" # Permite temporalmente todo para facilitar tus pruebas locales
+    "https://api-getway-utextracurricular-production.up.railway.app"
 ]
 
 app.add_middleware(

@@ -9,6 +9,9 @@ def setup_mfa(db: Session, user_id: str):
     if not user:
         raise HTTPException(status_code=404, detail="Usuario no encontrado")
     
+    if user.is_mfa_enabled: # type: ignore
+        raise HTTPException(status_code=400, detail="El MFA ya está activo en esta cuenta.")
+    
     secret = generate_mfa_secret()
     user.mfa_secret = secret # type: ignore
     UserRepository.update(db)
