@@ -47,7 +47,7 @@ def authenticate_user(db: Session, login_data: UserLoginRequest, response: Respo
     user.lockout_until = None # type: ignore
     UserRepository.update(db)
 
-    token_data = {"sub": str(user.id), "role": str(user.role.role_name)}
+    token_data = {"sub": str(user.id), "role": str(user.role.role_name), "username": f"{user.first_name} {user.last_name}"}
     access_token = create_access_token(token_data)
     refresh_token = create_refresh_token(token_data)
     
@@ -63,6 +63,5 @@ def authenticate_user(db: Session, login_data: UserLoginRequest, response: Respo
     
     return {
         "access_token": access_token,
-        "refresh_token": refresh_token,
-        "user_name": f"{user.first_name} {user.last_name}"
+        "refresh_token": refresh_token
     }

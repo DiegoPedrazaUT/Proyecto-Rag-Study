@@ -161,7 +161,11 @@ class PaginatedUserResponse(BaseModel):
     total_count: int = Field(..., description="Total de usuarios encontrados")
     users: List[UserResponseBase] = Field(..., description="Lista de usuarios")
     
-class GoogleCompleteProfileRequest(BaseModel):
-    temp_token: str = Field(..., description="Token de seguridad encriptado entregado por el callback de Google")
-    career_id: int = Field(..., gt=0, description="ID de la carrera seleccionada")
-    matricula: str = Field(..., min_length=8, description="Matrícula escolar única")
+class CompleteStudentProfileRequest(BaseModel):
+    temp_token: str
+    matricula: str
+    career_id: int
+
+class CompleteTeacherProfileRequest(BaseModel):
+    temp_token: str
+    career_id: int

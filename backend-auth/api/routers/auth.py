@@ -3,7 +3,7 @@ from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
 from database.database import get_db
 from api import schemas
-from services import session_service, google_service
+from services import session_service, google_service, registration_service
 from core.security import verify_refresh_token, create_access_token
 
 router = APIRouter(prefix="/auth", tags=["Autenticación y Sesión"])
@@ -56,11 +56,10 @@ async def google_callback(code: str, response: Response, db: Session = Depends(g
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
-@router.post("/google/complete-profile")
-def complete_google_profile(
-    request: schemas.GoogleCompleteProfileRequest, 
-    response: Response, 
-    db: Session = Depends(get_db)
-):
-    """Recibe la matrícula, carrera y token de seguridad para finalizar el registro."""
-    return google_service.complete_google_registration(db, request, response)
+@router.post("/auth/complete-student")
+def complete_student(request: schemas.CompleteStudentProfileRequest, db: Session = Depends(get_db)):
+    return registration_service.complete_student_profile(db, request)
+
+@router.post("/auth/complete-teacher")
+def complete_teacher(request: schemas.CompleteTeacherProfileRequest, db: Session = Depends(get_db)):
+    return registration_service.complete_teacher_profile(db, request)

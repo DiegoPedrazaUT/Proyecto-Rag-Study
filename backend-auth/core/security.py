@@ -1,3 +1,4 @@
+from fastapi import HTTPException
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 from passlib.context import CryptContext
@@ -22,6 +23,17 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -
     
     to_encode.update({"exp": expire, "type": "access"})
     return jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
+
+def verify_token(token: str):
+    try:
+        # Decodificamos el token usando la misma clave secreta con la que se creó
+        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=["HS256"])
+        email = payload.get("email")
+        if email is None:
+            raise HTTPException(status_code=401, detail="Token inválido")
+        return email
+    except Exception:
+        raise HTTPException(status_code=401, detail="Token expirado o inválido")
 
 def create_refresh_token(data: dict) -> str:
     to_encode = data.copy()
