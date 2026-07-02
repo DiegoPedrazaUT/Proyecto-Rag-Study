@@ -1,8 +1,9 @@
-from fastapi import APIRouter, Depends, Response, Cookie, HTTPException
+from fastapi import APIRouter, Depends, Response, Cookie, HTTPException, status
+from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
 from database.database import get_db
 from api import schemas
-from services import session_service
+from services import session_service, google_service
 from core.security import verify_refresh_token, create_access_token
 
 router = APIRouter(prefix="/auth", tags=["Autenticación y Sesión"])
@@ -34,3 +35,32 @@ def refresh_token(response: Response, refresh_token: str | None = Cookie(None)):
         httponly=True, secure=True, samesite="none", max_age=15 * 60
     )
     return {"message": "Token renovado exitosamente"}
+
+@router.get("/google")
+def login_with_google():
+    """Redirige al usuario a la pantalla de consentimiento de Google."""
+    url = google_service.get_google_auth_url()
+    return RedirectResponse(url)
+
+@router.get("/google/callback")
+async def google_callback(code: str, response: Response, db: Session = Depends(get_db)):
+    """Recibe el código de Google y devuelve JWT o un 202 con Token Temporal."""
+    try:
+        google_user = await google_service.get_google_user_info(code)
+        result = google_service.process_google_login(db, google_user, response)
+        
+        if result.get("status") == "needs_completion":
+            response.status_code = status.HTTP_202_ACCEPTED
+            
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+@router.post("/google/complete-profile")
+def complete_google_profile(
+    request: schemas.GoogleCompleteProfileRequest, 
+    response: Response, 
+    db: Session = Depends(get_db)
+):
+    """Recibe la matrícula, carrera y token de seguridad para finalizar el registro."""
+    return google_service.complete_google_registration(db, request, response)
