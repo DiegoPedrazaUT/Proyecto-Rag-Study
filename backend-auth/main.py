@@ -1,8 +1,3 @@
-import sys
-import os
-# Esto le dice a Python que busque módulos en la carpeta principal del proyecto
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
 from fastapi import FastAPI, Depends
 from sqlalchemy.orm import Session
 from fastapi.middleware.cors import CORSMiddleware
