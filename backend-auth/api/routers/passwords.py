@@ -3,17 +3,17 @@ from fastapi.responses import HTMLResponse
 from sqlalchemy.orm import Session
 from database.database import get_db
 from database.models import User
-from api import schemas
+from api import schemas, docs
 from services import password_service
 from api.dependencies import get_current_user
 
 router = APIRouter(prefix="/auth", tags=["Contraseñas y Correos"])
 
-@router.post("/forgot-password")
+@router.post("/forgot-password", **docs.FORGOT_PASSWORD)
 def forgot_password(request: schemas.ForgotPasswordRequest, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
     return password_service.process_forgot_password(db, request, background_tasks)
 
-@router.post("/reset-password")
+@router.post("/reset-password", **docs.RESET_PASSWORD)
 def reset_password(request: schemas.ResetPasswordRequest, db: Session = Depends(get_db)):
     return password_service.process_reset_password(db, request)
 
@@ -31,11 +31,11 @@ def verify_email(token: str, db: Session = Depends(get_db)):
     """
     return html_content
 
-@router.post("/resend-verification")
+@router.post("/resend-verification", **docs.RESEND_VERIFICATION)
 def resend_verification_email(request: schemas.ResendVerificationRequest, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
     return password_service.resend_verification(db, request.email, background_tasks)
 
-@router.post("/change-password")
+@router.post("/change-password", **docs.CHANGE_PASSWORD)
 def change_password(
     request: schemas.ChangePasswordRequest, 
     db: Session = Depends(get_db), 

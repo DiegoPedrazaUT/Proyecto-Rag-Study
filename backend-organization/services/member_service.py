@@ -2,7 +2,7 @@
 from sqlalchemy.orm import Session
 from fastapi import HTTPException
 from repositories.organization_repository import OrganizationRepository, MemberRepository
-from database.models import Organization, StudentProfile  # <-- ¡Asegúrate de importar Organization aquí!
+from database.models import Organization, StudentProfile, User  # <-- ¡Asegúrate de importar Organization aquí!
 from uuid import UUID
 
 def join_organization(db: Session, join_code: str, student_payload: dict):
@@ -49,6 +49,13 @@ def update_member_status(db: Session, org_id: str, student_id: str, new_status: 
     
     # 4. Acción en Base de Datos: Intentamos hacer el UPDATE del estatus del alumno
     updated_member = MemberRepository.update_status(db, org_id, student_id, new_status)
+    if not updated_member:
+        raise HTTPException(status_code=404, detail="Alumno no encontrado en lista de espera")
+        
+    # ¡NUEVO! Actualizar la tabla de historial de invitaciones
+    user = db.query(User).filter(User.id == student_id).first()
+    if user:
+        MemberRepository.update_invite_status_by_email(db, org_id, user.email, new_status) # type: ignore
     
     # 5. Candado de Alumno: Si el repositorio devuelve None, significa que ese alumno no está en la lista de espera de esta clase
     if not updated_member:
@@ -58,19 +65,37 @@ def update_member_status(db: Session, org_id: str, student_id: str, new_status: 
 
 
 def get_organization_members(db: Session, org_id: str, current_user: dict):
-    # Traemos la lista con los nombres reales combinados
-    members = MemberRepository.get_members_with_users(db, org_id)
+    """Retorna SOLO a los miembros aceptados (El Directorio del Salón)"""
+    members = MemberRepository.get_members_by_status(db, org_id, "accepted")
     
-    result = []
-    for member in members:
-        result.append({
-            "organization_id": member.organization_id,
-            "user_id": member.user_id,
-            "role": member.role,
-            "status": member.status,
-            "joined_at": member.joined_at,
-            "first_name": member.first_name,
-            "last_name": member.last_name,
-            "email": member.email
-        })
-    return result
+    return [{
+        "organization_id": m.organization_id,
+        "user_id": m.user_id,
+        "role": m.role,
+        "status": m.status,
+        "joined_at": m.joined_at,
+        "first_name": m.first_name,
+        "last_name": m.last_name,
+        "email": m.email
+    } for m in members]
+
+def get_waitlist_members(db: Session, org_id: str, current_user: dict):
+    """Retorna SOLO a los miembros pendientes (Blindado Anti-IDOR para el Profe)"""
+    if current_user.get("role") != "teacher":
+        raise HTTPException(status_code=403, detail="Solo los profesores ven la lista de espera")
+        
+    org = db.query(Organization).filter(Organization.id == org_id).first()
+    if not org or str(org.created_by) != str(current_user.get("sub")):
+        raise HTTPException(status_code=403, detail="Acceso denegado. No eres el dueño del salón")
+
+    members = MemberRepository.get_members_by_status(db, org_id, "pending")
+    return [{
+        "organization_id": m.organization_id,
+        "user_id": m.user_id,
+        "role": m.role,
+        "status": m.status,
+        "joined_at": m.joined_at,
+        "first_name": m.first_name,
+        "last_name": m.last_name,
+        "email": m.email
+    } for m in members]

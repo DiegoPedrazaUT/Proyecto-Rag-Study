@@ -115,7 +115,8 @@ class MemberRepository:
         return member
 
     @staticmethod
-    def get_members_with_users(db: Session, org_id: str):
+    def get_members_by_status(db: Session, org_id: str, status: str):
+        """Trae a los miembros filtrando si están 'accepted' o 'pending'"""
         return db.query(
             OrganizationMember.organization_id,
             OrganizationMember.user_id,
@@ -126,4 +127,19 @@ class MemberRepository:
             User.last_name,
             User.email
         ).join(User, User.id == OrganizationMember.user_id)\
-        .filter(OrganizationMember.organization_id == org_id).all()
+        .filter(
+            OrganizationMember.organization_id == org_id,
+            OrganizationMember.status == status
+        ).all()
+
+    @staticmethod
+    def update_invite_status_by_email(db: Session, org_id: str, email: str, new_status: str):
+        """Actualiza el historial de invitaciones si el alumno fue aceptado"""
+        invite = db.query(OrganizationInvite).filter(
+            OrganizationInvite.organization_id == org_id,
+            OrganizationInvite.email == email
+        ).first()
+        
+        if invite:
+            invite.status = new_status # type: ignore
+            db.commit()
