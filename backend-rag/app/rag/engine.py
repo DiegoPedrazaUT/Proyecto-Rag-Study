@@ -9,12 +9,21 @@ import os
 from supabase import create_client, Client
 from app.core.config import settings
 
-supabase_url = settings.SUPABASE_URL or os.environ.get("SUPABASE_URL")
-supabase_key = settings.SUPABASE_KEY or os.environ.get("SUPABASE_KEY")
+# 1. Extraemos los valores crudos
+raw_url = settings.SUPABASE_URL or os.environ.get("SUPABASE_URL", "")
+raw_key = settings.SUPABASE_KEY or os.environ.get("SUPABASE_KEY", "")
+raw_google = settings.GOOGLE_API_KEY or os.environ.get("GOOGLE_API_KEY", "")
 
+# 2. LIMPIEZA EXTREMA: Borramos comillas dobles, simples y espacios en blanco
+supabase_url = raw_url.strip().strip('"').strip("'")
+supabase_key = raw_key.strip().strip('"').strip("'")
+google_key = raw_google.strip().strip('"').strip("'")
+
+# 3. Validamos
 if not supabase_url or not supabase_key:
     raise ValueError("CRÍTICO: SUPABASE_URL o SUPABASE_KEY no están configuradas en el entorno.")
 
+# 4. Conectamos a Supabase
 supabase: Client = create_client(supabase_url, supabase_key)
 
 llm = ChatGoogleGenerativeAI(
