@@ -1,21 +1,19 @@
-# app/core/config.py
-import os
-from dotenv import load_dotenv
-from pydantic_settings import BaseSettings
-
-load_dotenv()
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
-    DATABASE_URL: str = os.getenv("DATABASE_URL") or ""
-    SECRET_KEY: str = os.getenv("SECRET_KEY") or ""
-    ALGORITHM: str = os.getenv("ALGORITHM", "HS256")
-    GOOGLE_API_KEY: str = os.getenv("GOOGLE_API_KEY") or ""
-    
-    # ¡NUEVOS! Para conectarnos directamente a las tablas
-    SUPABASE_URL: str = os.getenv("SUPABASE_URL") or ""
-    SUPABASE_KEY: str = os.getenv("SUPABASE_KEY") or ""
+    # 1. Definimos las variables (Pydantic las buscará en Railway en MAYÚSCULAS)
+    SUPABASE_URL: str
+    SUPABASE_KEY: str
+    GOOGLE_API_KEY: str
+    SECRET_KEY: str
+    ALGORITHM: str = "HS256"
+    DATABASE_URL: str
 
-    class Config:
-        env_file = ".env"
+    # 2. LA CONFIGURACIÓN CRÍTICA PARA PRODUCCIÓN:
+    model_config = SettingsConfigDict(
+        env_file=".env",           # Para tu desarrollo local
+        env_file_encoding="utf-8",
+        extra="ignore"             # Evita que truene si hay variables extra en Railway
+    )
 
 settings = Settings()
