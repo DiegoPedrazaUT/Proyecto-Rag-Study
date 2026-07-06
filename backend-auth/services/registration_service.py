@@ -83,12 +83,12 @@ def register_teacher(db: Session, user_data: schemas.TeacherRegisterRequest, bac
     }
 
     try:
-        new_user = UserRepository.create_student(db, base_user_data, profile_data)
+        new_user = UserRepository.create_teacher(db, base_user_data, profile_data)
         background_tasks.add_task(send_verification_email, to_email=new_user.email, token=token) # type: ignore
         return new_user
     except IntegrityError:
         db.rollback()
-        raise HTTPException(status_code=400, detail="El correo o la matrícula ya se encuentran registrados.")
+        raise HTTPException(status_code=400, detail="El correo ya se encuentran registrados.")
     except Exception as e:
         db.rollback()
         # Nunca devolver str(e) al cliente en producción
