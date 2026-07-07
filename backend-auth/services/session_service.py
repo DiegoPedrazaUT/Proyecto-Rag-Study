@@ -20,7 +20,7 @@ def authenticate_user(db: Session, login_data: UserLoginRequest, response: Respo
     lockout = cast(Optional[datetime], user.lockout_until)
     if lockout and lockout > datetime.now(timezone.utc):
         tiempo_restante = (lockout - datetime.now(timezone.utc)).seconds // 60
-        raise HTTPException(status_code=403, detail=f"Cuenta bloqueada. Intenta en {tiempo_restante} minutos.")
+        raise HTTPException(status_code=429, detail=f"Cuenta bloqueada. Intenta en {tiempo_restante} minutos.")
 
     if not verify_password(login_data.password, cast(str, user.password_hash)):
         current_attempts = cast(int, user.failed_attempts) + 1
@@ -29,7 +29,7 @@ def authenticate_user(db: Session, login_data: UserLoginRequest, response: Respo
         if current_attempts >= 5:
             user.lockout_until = datetime.now(timezone.utc) + timedelta(minutes=15) # type: ignore
             UserRepository.update(db) 
-            raise HTTPException(status_code=403, detail="Demasiados intentos. Bloqueado temporalmente.")
+            raise HTTPException(status_code=429, detail="Demasiados intentos. Bloqueado temporalmente.")
         
         UserRepository.update(db)
         raise HTTPException(status_code=401, detail="Correo o contraseña incorrectos")

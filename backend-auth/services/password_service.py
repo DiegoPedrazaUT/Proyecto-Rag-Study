@@ -47,7 +47,7 @@ def change_user_password(db: Session, user_id: str, request: ChangePasswordReque
         raise HTTPException(status_code=404, detail="Usuario no encontrado")
 
     if not verify_password(request.current_password, cast(str, user.password_hash)):
-        raise HTTPException(status_code=400, detail="La contraseña actual es incorrecta")
+        raise HTTPException(status_code=401, detail="La contraseña actual es incorrecta")
 
     user.password_hash = get_password_hash(request.new_password) # type: ignore
     UserRepository.update(db)

@@ -28,4 +28,4 @@ def confirm_mfa(db: Session, user_id: str, code: str):
         UserRepository.update(db)
         return {"message": "MFA activado exitosamente"}
     
-    raise HTTPException(status_code=400, detail="Código inválido")
+    raise HTTPException(status_code=401, detail="Código inválido")
