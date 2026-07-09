@@ -6,6 +6,13 @@ from langchain_community.document_loaders import PyPDFLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_google_genai import GoogleGenerativeAIEmbeddings
 
+from fastapi import Response
+from pydantic import BaseModel
+from langchain_text_splitters import RecursiveCharacterTextSplitter
+
+from app.rag.engine import llm 
+from langchain_core.messages import SystemMessage, HumanMessage
+
 from app.core.security import get_current_user
 from app.core.config import settings
 
@@ -18,6 +25,14 @@ embeddings_model = GoogleGenerativeAIEmbeddings(
     google_api_key=settings.GOOGLE_API_KEY,
     output_dimensionality=768
 )
+
+class DocumentUpdate(BaseModel):
+    title: str
+
+class ChunkRequest(BaseModel):
+    texto: str
+    chunk_size: int = 1000
+    chunk_overlap: int = 200
 
 @router.post("/")
 async def upload_and_process_document(
@@ -119,3 +134,146 @@ async def delete_document(document_id: str, current_user: dict = Depends(get_cur
         if isinstance(e, HTTPException):
             raise e
         raise HTTPException(status_code=500, detail=f"Error al eliminar documento: {str(e)}")
+    
+@router.post("/{document_id}/summary")
+async def generate_document_summary(
+    document_id: str, 
+    current_user: dict = Depends(get_current_user)
+):
+    """Lee todos los vectores de un PDF específico y genera un resumen académico estructurado."""
+    user_id = current_user["user_id"]
+
+    try:
+        # 1. Validar propiedad del documento
+        doc_check = supabase.table("documents").select("title").eq("id", document_id).eq("user_id", user_id).execute()
+        if not doc_check.data:
+            raise HTTPException(status_code=404, detail="Documento no encontrado o sin permisos.")
+        
+        doc_title = doc_check.data[0]["title"]
+
+        # 2. Extraer todo el texto limpio desde la base de datos (sin volver a leer el PDF físico)
+        chunks_res = supabase.table("document_chunks").select("content").eq("document_id", document_id).execute()
+        
+        if not chunks_res.data:
+            raise HTTPException(status_code=400, detail="El documento no tiene contenido procesado.")
+
+        # Unimos todos los fragmentos en un solo texto gigante
+        full_text = "\n\n".join([row["content"] for row in chunks_res.data])
+
+        # 3. Construir el Prompt Estricto para el Resumen
+        prompt = [
+            SystemMessage(content="""Eres un asistente académico experto de la UT. 
+Tu tarea es leer el documento proporcionado y generar un resumen estructurado y fácil de digerir.
+REGLAS:
+- Usa formato Markdown (títulos, viñetas, negritas).
+- Destaca los conceptos más importantes.
+- Si hay fórmulas, fechas clave o definiciones, ponlas en una sección especial.
+- Sé conciso pero no omitas información vital."""),
+            HumanMessage(content=f"Documento: {doc_title}\n\nContenido a resumir:\n{full_text}")
+        ]
+
+        # 4. Invocar a Gemini (Aprovechando su enorme ventana de contexto)
+        respuesta = llm.invoke(prompt)
+
+        return {
+            "document_id": document_id,
+            "title": doc_title,
+            "summary": respuesta.content
+        }
+
+    except Exception as e:
+        if isinstance(e, HTTPException): 
+            raise e
+        raise HTTPException(status_code=500, detail=f"Error al generar el resumen: {str(e)}")
+    
+@router.patch("/{document_id}")
+async def update_document_metadata(
+    document_id: str, 
+    req: DocumentUpdate, 
+    current_user: dict = Depends(get_current_user)
+):
+    """Permite al alumno cambiar el nombre de su documento."""
+    user_id = current_user["user_id"]
+    try:
+        res = supabase.table("documents").update({"title": req.title}).eq("id", document_id).eq("user_id", user_id).execute()
+        if not res.data:
+            raise HTTPException(status_code=404, detail="Documento no encontrado o sin permisos.")
+        return {"message": "Documento actualizado", "document": res.data[0]}
+    except Exception as e:
+        if isinstance(e, HTTPException): raise e
+        raise HTTPException(status_code=500, detail=f"Error al actualizar: {str(e)}")
+
+
+@router.get("/{document_id}/download")
+async def download_document(
+    document_id: str, 
+    current_user: dict = Depends(get_current_user)
+):
+    """Reconstruye el texto del documento desde los vectores y lo devuelve como archivo .txt descargable."""
+    user_id = current_user["user_id"]
+    try:
+        doc_check = supabase.table("documents").select("title").eq("id", document_id).eq("user_id", user_id).execute()
+        if not doc_check.data:
+            raise HTTPException(status_code=404, detail="Documento no encontrado.")
+        
+        doc_title = doc_check.data[0]["title"]
+        
+        chunks_res = supabase.table("document_chunks").select("content").eq("document_id", document_id).order("page_number", desc=False).execute()
+        
+        full_text = f"--- Documento: {doc_title} ---\n\n"
+        full_text += "\n\n".join([row["content"] for row in chunks_res.data])
+        
+        return Response(
+            content=full_text, 
+            media_type="text/plain", 
+            headers={"Content-Disposition": f'attachment; filename="{doc_title}_extraido.txt"'}
+        )
+    except Exception as e:
+        if isinstance(e, HTTPException): raise e
+        raise HTTPException(status_code=500, detail=f"Error al descargar: {str(e)}")
+
+
+@router.post("/v1/chunk")
+async def chunk_text_utility(
+    req: ChunkRequest, 
+    current_user: dict = Depends(get_current_user)
+):
+    """Endpoint de utilidad: Recibe un texto largo y devuelve cómo LangChain lo dividiría."""
+    try:
+        text_splitter = RecursiveCharacterTextSplitter(
+            chunk_size=req.chunk_size, 
+            chunk_overlap=req.chunk_overlap
+        )
+        chunks = text_splitter.split_text(req.texto)
+        
+        return {
+            "total_chunks": len(chunks),
+            "chunks": chunks
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error al procesar chunks: {str(e)}")
+
+
+@router.get("/{document_id}/reindex")
+async def get_document_index(
+    document_id: str, 
+    current_user: dict = Depends(get_current_user)
+):
+    """Devuelve un mapeo de las páginas vectorizadas para que el front sepa el índice del PDF."""
+    user_id = current_user["user_id"]
+    try:
+        chunks_res = supabase.table("document_chunks").select("page_number").eq("document_id", document_id).execute()
+        
+        if not chunks_res.data:
+            return {"document_id": document_id, "total_paginas": 0, "paginas_indexadas": []}
+            
+        paginas = sorted(list(set([row["page_number"] for row in chunks_res.data])))
+        
+        return {
+            "document_id": document_id,
+            "total_paginas_procesadas": len(paginas),
+            "ultima_pagina_leida": paginas[-1] if paginas else 0, # Simulamos la última página leída
+            "paginas_indexadas": paginas
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error al reindexar: {str(e)}")

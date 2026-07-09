@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 
 from database.database import get_db
 from database.models import User
-from api import schemas
+from api import schemas, docs
 from services import registration_service, user_management_service
 
 # Importamos la dependencia de seguridad
@@ -15,18 +15,18 @@ router = APIRouter(tags=["Gestión de Usuarios"])
 # ==========================================
 # 1. REGISTRO DE USUARIOS
 # ==========================================
-@router.post("/auth/register/student", status_code=status.HTTP_201_CREATED)
+@router.post("/auth/register/student", status_code=status.HTTP_201_CREATED, **docs.REGISTER_STUDENT)
 def register_student(data: schemas.StudentRegisterRequest, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
     return registration_service.register_student(db, data, background_tasks)
 
-@router.post("/auth/register/teacher", status_code=status.HTTP_201_CREATED)
+@router.post("/auth/register/teacher", status_code=status.HTTP_201_CREATED, **docs.REGISTER_TEACHER)
 def register_teacher(data: schemas.TeacherRegisterRequest, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
     return registration_service.register_teacher(db, data, background_tasks)
 
 # ==========================================
 # 2. DIRECTORIO GENERAL
 # ==========================================
-@router.get("/users", response_model=schemas.PaginatedUserResponse)
+@router.get("/users", response_model=schemas.PaginatedUserResponse, **docs.GET_USERS)
 def get_users(
     role: Optional[str] = Query(None, description="Filtrar por rol (ej. student, teacher)"),
     career_id: Optional[int] = Query(None, description="Filtrar por ID de carrera"),
@@ -39,11 +39,11 @@ def get_users(
 # ==========================================
 # 3. RUTAS ESTÁTICAS (DEL PROPIO USUARIO) -> ¡SIEMPRE ARRIBA!
 # ==========================================
-@router.get("/users/me", response_model=schemas.UserResponseBase)
+@router.get("/users/me", response_model=schemas.UserResponseBase, **docs.GET_ME)
 def get_my_profile(current_user: User = Depends(get_current_user)):
     return current_user
 
-@router.patch("/users/me", response_model=schemas.UserResponseBase)
+@router.patch("/users/me", response_model=schemas.UserResponseBase, **docs.PATCH_ME)
 def update_my_profile_partial(
     update_data: schemas.UserUpdatePartial, 
     db: Session = Depends(get_db),
@@ -51,7 +51,7 @@ def update_my_profile_partial(
 ):
     return user_management_service.update_user_partial(db, str(current_user.id), update_data)
 
-@router.put("/users/me", response_model=schemas.UserResponseBase)
+@router.put("/users/me", response_model=schemas.UserResponseBase, **docs.PUT_ME)
 def update_my_profile_complete(
     update_data: schemas.UserUpdateComplete, 
     db: Session = Depends(get_db),
@@ -62,11 +62,11 @@ def update_my_profile_complete(
 # ==========================================
 # 4. RUTAS DINÁMICAS (/{user_id}) -> EXCLUSIVAS DE ADMIN
 # ==========================================
-@router.get("/users/{user_id}", response_model=schemas.UserResponseBase)
+@router.get("/users/{user_id}", response_model=schemas.UserResponseBase, **docs.GET_USER_ID)
 def get_user(user_id: str, db: Session = Depends(get_db)):
     return user_management_service.get_user_by_id(db, user_id)
 
-@router.patch("/users/{user_id}", response_model=schemas.UserResponseBase)
+@router.patch("/users/{user_id}", response_model=schemas.UserResponseBase, **docs.PATCH_USER_ADMIN)
 def admin_update_user_partial(
     user_id: str, 
     update_data: schemas.AdminUserUpdatePartial, 
