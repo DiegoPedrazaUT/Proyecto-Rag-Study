@@ -7,6 +7,7 @@ from app.core.security import CurrentUser, get_current_user
 from app.db.session import get_db
 from app.schemas.deck import DeckCreate, DeckDetail, DeckRead, DeckWithCount
 from app.services.deck_service import DeckService
+from app.schemas.llm import DeckFromDocumentRequest
 
 router = APIRouter(prefix="/decks", tags=["decks"])
 
@@ -110,3 +111,35 @@ async def delete_deck(
     """
     service = DeckService(db)
     await service.delete_deck(deck_id=deck_id, current_user=current_user)
+
+@router.post(
+    "/from-document",
+    response_model=DeckDetail,
+    status_code=status.HTTP_201_CREATED,
+    summary="Generar un mazo de flashcards desde un documento (IA)",
+    responses={
+        201: {"description": "Mazo generado con flashcards creadas por la IA."},
+        401: {"description": "Token ausente, inválido o expirado."},
+        403: {"description": "El usuario no pertenece al salón indicado."},
+        404: {"description": "El documento no existe."},
+        409: {"description": "El documento aún no está procesado (status != 'listo')."},
+        422: {"description": "Datos inválidos o documento sin contenido."},
+        500: {"description": "Error interno del servidor o de la LLM."},
+    },
+)
+
+async def create_deck_from_document(
+    payload: DeckFromDocumentRequest,
+    current_user: CurrentUser = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> DeckDetail:
+    """Genera un mazo de flashcards a partir de un documento procesado.
+
+    Lee el contenido del documento, le pide a la IA que genere las flashcards,
+    y crea el mazo en el salón indicado.
+    """
+    service = DeckService(db)
+    deck = await service.create_deck_from_document(
+        payload=payload, current_user=current_user
+    )
+    return DeckDetail.model_validate(deck)

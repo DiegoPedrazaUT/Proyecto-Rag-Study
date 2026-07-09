@@ -7,6 +7,8 @@ from app.core.security import CurrentUser
 from app.models.flashcards import Flashcard
 from app.repositories.flashcard_repository import FlashcardRepository
 from app.schemas.flashcard import FlashcardBulkCreate, FlashcardUpdate
+from app.services.llm_service import LLMService
+from app.schemas.llm import LLMEditProposal
 
 
 class FlashcardService:
@@ -118,3 +120,42 @@ class FlashcardService:
 
         await self.repo.delete_card(card)
         await self.db.commit()
+
+    async def propose_llm_edit(
+        self,
+        *,
+        deck_id: uuid.UUID,
+        card_id: uuid.UUID,
+        instruction: str,
+        current_user: CurrentUser,
+    ) -> LLMEditProposal:
+        """Genera una propuesta de edición de una flashcard usando la LLM.
+
+        No guarda nada: devuelve la propuesta para que el usuario la revise
+        y, si le gusta, la aplique con el PATCH existente. Solo el dueño puede.
+        """
+        deck = await self.repo.get_deck(deck_id)
+        if deck is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="El mazo no existe.",
+            )
+        if deck.user_id != current_user.id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="No eres el dueño de este mazo.",
+            )
+
+        card = await self.repo.get_card(card_id)
+        if card is None or card.deck_id != deck_id:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="La flashcard no existe en este mazo.",
+            )
+
+        llm = LLMService()
+        return await llm.edit_flashcard(
+            front_text=card.front_text,
+            back_text=card.back_text,
+            instruction=instruction,
+        )

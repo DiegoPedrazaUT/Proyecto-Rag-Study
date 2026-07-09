@@ -20,6 +20,11 @@ class Settings(BaseSettings):
 
     # Logs SQL en consola (útil en dev, apágalo en prod).
     SQL_ECHO: bool = False
+    
+    # Gemini / LLM
+    GOOGLE_API_KEY: str
+    GEMINI_MODEL: str = "gemini-3-flash-preview"
+
 
 
 @lru_cache

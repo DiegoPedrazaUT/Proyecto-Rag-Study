@@ -11,6 +11,7 @@ from app.schemas.flashcard import (
     FlashcardUpdate,
 )
 from app.services.flashcard_service import FlashcardService
+from app.schemas.llm import LLMEditRequest, LLMEditProposal
 
 router = APIRouter(prefix="/decks", tags=["flashcards"])
 
@@ -106,4 +107,38 @@ async def delete_card(
     service = FlashcardService(db)
     await service.delete_card(
         deck_id=deck_id, card_id=card_id, current_user=current_user
+    )
+
+@router.post(
+    "/{deck_id}/cards/{card_id}/llm-edit",
+    response_model=LLMEditProposal,
+    summary="Proponer edición de una flashcard con IA",
+    responses={
+        200: {"description": "Propuesta de edición generada (no se guarda)."},
+        401: {"description": "Token ausente, inválido o expirado."},
+        403: {"description": "El usuario no es el dueño del mazo."},
+        404: {"description": "El mazo no existe, o la flashcard no pertenece a ese mazo."},
+        422: {"description": "Instrucción inválida (vacía o demasiado larga)."},
+        500: {"description": "Error interno del servidor o de la LLM."},
+    },
+)
+async def llm_edit_card(
+    deck_id: uuid.UUID,
+    card_id: uuid.UUID,
+    payload: LLMEditRequest,
+    current_user: CurrentUser = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> LLMEditProposal:
+    """Genera una propuesta de edición de una flashcard usando la IA.
+
+    Recibe una instrucción (ej: "hazla más simple"), le pide a la LLM que
+    edite la flashcard, y devuelve la propuesta SIN guardarla. El usuario
+    puede aplicarla luego con el endpoint PATCH.
+    """
+    service = FlashcardService(db)
+    return await service.propose_llm_edit(
+        deck_id=deck_id,
+        card_id=card_id,
+        instruction=payload.instruction,
+        current_user=current_user,
     )

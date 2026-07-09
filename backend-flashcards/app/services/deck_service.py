@@ -8,6 +8,10 @@ from app.models.flashcards import FlashcardDeck
 from app.repositories.deck_repository import DeckRepository
 from app.schemas.deck import DeckCreate, DeckDetail, DeckWithCount
 from app.schemas.flashcard import FlashcardRead
+from app.repositories.document_repository import DocumentRepository
+from app.services.llm_service import LLMService
+from app.schemas.llm import DeckFromDocumentRequest
+from app.models.flashcards import Flashcard
 
 
 class DeckService:
@@ -116,4 +120,62 @@ class DeckService:
 
         await self.repo.delete(deck)
         await self.db.commit()
-    
+
+    async def create_deck_from_document(
+        self, *, payload: DeckFromDocumentRequest, current_user: CurrentUser
+    ) -> FlashcardDeck:
+        """Genera un mazo con flashcards creadas por la LLM desde un documento."""
+        # 1) El usuario debe ser miembro del salón destino.
+        is_member = await self.repo.is_member(
+            user_id=current_user.id,
+            organization_id=payload.organization_id,
+        )
+        if not is_member:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="No perteneces a este salón.",
+            )
+
+        # 2) El documento debe existir y estar procesado.
+        docs = DocumentRepository(self.db)
+        document = await docs.get_document(payload.document_id)
+        if document is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="El documento no existe.",
+            )
+        if document.status != "listo":
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="El documento aún no está procesado (status distinto de 'listo').",
+            )
+
+        # 3) Leer el texto del documento.
+        text = await docs.get_chunks_text(payload.document_id)
+        if not text.strip():
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="El documento no tiene contenido de texto para procesar.",
+            )
+
+        # 4) Generar las flashcards con la LLM.
+        llm = LLMService()
+        generated = await llm.generate_cards_from_text(
+            text=text, num_cards=payload.num_cards
+        )
+
+        # 5) Crear el mazo con las flashcards generadas.
+        deck = FlashcardDeck(
+            user_id=current_user.id,
+            organization_id=payload.organization_id,
+            document_id=payload.document_id,
+            title=payload.title,
+        )
+        deck.cards = [
+            Flashcard(front_text=c.front_text, back_text=c.back_text)
+            for c in generated.cards
+        ]
+        await self.repo.add(deck)
+        await self.db.commit()
+
+        return await self.repo.get_deck_with_cards(deck.id)    
