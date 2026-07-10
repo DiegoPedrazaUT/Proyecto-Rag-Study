@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.security import CurrentUser
 from app.models.flashcards import FlashcardDeck
 from app.repositories.deck_repository import DeckRepository
+from app.repositories.organization_repository import OrganizationRepository
 from app.schemas.deck import DeckCreate, DeckDetail, DeckWithCount
 from app.schemas.flashcard import FlashcardRead
 from app.repositories.document_repository import DocumentRepository
@@ -20,11 +21,12 @@ class DeckService:
     def __init__(self, db: AsyncSession):
         self.db = db
         self.repo = DeckRepository(db)
+        self.orgs = OrganizationRepository(db)
 
     async def create_empty_deck(
         self, *, payload: DeckCreate, current_user: CurrentUser
     ) -> FlashcardDeck:
-        is_member = await self.repo.is_member(
+        is_member = await self.orgs.is_member(
             user_id=current_user.id,
             organization_id=payload.organization_id,
         )
@@ -77,7 +79,7 @@ class DeckService:
                 detail="El mazo no existe.",
             )
 
-        is_member = await self.repo.is_member(
+        is_member = await self.orgs.is_member(
             user_id=current_user.id,
             organization_id=deck.organization_id,
         )
@@ -126,7 +128,7 @@ class DeckService:
     ) -> FlashcardDeck:
         """Genera un mazo con flashcards creadas por la LLM desde un documento."""
         # 1) El usuario debe ser miembro del salón destino.
-        is_member = await self.repo.is_member(
+        is_member = await self.orgs.is_member(
             user_id=current_user.id,
             organization_id=payload.organization_id,
         )
@@ -187,7 +189,7 @@ class DeckService:
 
         El usuario debe pertenecer (accepted) al salón.
         """
-        is_member = await self.repo.is_member(
+        is_member = await self.orgs.is_member(
             user_id=current_user.id,
             organization_id=organization_id,
         )

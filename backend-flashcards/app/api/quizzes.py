@@ -50,6 +50,32 @@ async def create_quiz(
 
 
 @router.get(
+    "/organization/{organization_id}",
+    response_model=list[QuizSummary],
+    summary="Listar todos los quizzes de un salón",
+    responses={
+        200: {"description": "Quizzes del salón (visible para cualquier miembro)."},
+        401: {"description": "Token ausente, inválido o expirado."},
+        403: {"description": "El usuario no pertenece al salón."},
+        422: {"description": "El organization_id no es un UUID válido."},
+        500: {"description": "Error interno del servidor."},
+    },
+)
+async def list_organization_quizzes(
+    organization_id: uuid.UUID,
+    current_user: CurrentUser = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> list[QuizSummary]:
+    """Lista todos los quizzes creados en un salón, sin importar quién los creó.
+
+    Accesible para cualquier miembro (accepted) del salón.
+    """
+    service = QuizService(db)
+    return await service.list_organization_quizzes(
+        organization_id=organization_id, current_user=current_user
+    )
+
+@router.get(
     "",
     response_model=list[QuizSummary],
     summary="Listar mis quizzes",
@@ -191,3 +217,4 @@ async def finish_attempt(
     return await service.finish_attempt(
         attempt_id=attempt_id, current_user=current_user
     )
+

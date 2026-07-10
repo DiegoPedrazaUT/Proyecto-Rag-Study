@@ -28,6 +28,11 @@ class Quiz(Base):
         ForeignKey("users.id", ondelete="CASCADE"),
         nullable=False,
     )
+    organization_id: Mapped[uuid.UUID | None] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=True,
+    )
     document_id: Mapped[uuid.UUID | None] = mapped_column(
         PG_UUID(as_uuid=True),
         ForeignKey("documents.id", ondelete="CASCADE"),
@@ -43,7 +48,6 @@ class Quiz(Base):
         cascade="all, delete-orphan",
         passive_deletes=True,
     )
-
 
 class QuizQuestion(Base):
     __tablename__ = "quiz_questions"

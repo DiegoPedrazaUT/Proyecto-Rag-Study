@@ -47,6 +47,24 @@ class QuizRepository:
         result = await self.db.execute(stmt)
         return [(row[0], row[1]) for row in result.all()]
     
+    async def list_by_organization(
+        self, organization_id: uuid.UUID
+    ) -> list[tuple[Quiz, int]]:
+        """Quizzes de un salón, cada uno con su conteo de preguntas.
+
+        No filtra por creador: devuelve los quizzes de cualquier miembro.
+        Devuelve tuplas (quiz, question_count), del más reciente al más antiguo.
+        """
+        stmt = (
+            select(Quiz, func.count(QuizQuestion.id))
+            .outerjoin(QuizQuestion, QuizQuestion.quiz_id == Quiz.id)
+            .where(Quiz.organization_id == organization_id)
+            .group_by(Quiz.id)
+            .order_by(Quiz.created_at.desc())
+        )
+        result = await self.db.execute(stmt)
+        return [(row[0], row[1]) for row in result.all()]
+
 
 async def has_completed_attempt(
         self, *, quiz_id: uuid.UUID, user_id: uuid.UUID

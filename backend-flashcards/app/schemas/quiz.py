@@ -30,6 +30,7 @@ class QuizCreate(BaseModel):
     """Payload para crear un quiz completo (título + preguntas)."""
 
     title: str = Field(..., min_length=1, max_length=255)
+    organization_id: uuid.UUID
     document_id: uuid.UUID | None = None
     questions: list[QuizQuestionCreate] = Field(..., min_length=1)
 
