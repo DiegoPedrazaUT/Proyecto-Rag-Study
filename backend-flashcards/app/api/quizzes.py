@@ -15,6 +15,7 @@ from app.schemas.quiz import (
     QuizSummary,
     QuizWithAnswers,
     QuizWithoutAnswers,
+    QuizResultItem,
 )
 from app.services.attempt_service import AttemptService
 from app.services.quiz_service import QuizService
@@ -121,6 +122,34 @@ async def get_quiz(
     """
     service = QuizService(db)
     return await service.get_quiz(quiz_id=quiz_id, current_user=current_user)
+
+@router.get(
+    "/{quiz_id}/results",
+    response_model=list[QuizResultItem],
+    summary="Ver los resultados de los estudiantes en un quiz",
+    responses={
+        200: {"description": "Resultados de los intentos completados (solo el dueño)."},
+        401: {"description": "Token ausente, inválido o expirado."},
+        403: {"description": "Solo el dueño del quiz puede ver los resultados."},
+        404: {"description": "El quiz no existe."},
+        422: {"description": "El quiz_id no es un UUID válido."},
+        500: {"description": "Error interno del servidor."},
+    },
+)
+async def get_quiz_results(
+    quiz_id: uuid.UUID,
+    current_user: CurrentUser = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> list[QuizResultItem]:
+    """Lista los resultados de los estudiantes que completaron el quiz.
+
+    Devuelve el nombre del estudiante, su calificación y la fecha. Solo el
+    dueño del quiz (quien lo creó) puede acceder.
+    """
+    service = QuizService(db)
+    return await service.get_quiz_results(
+        quiz_id=quiz_id, current_user=current_user
+    )
 
 
 @router.post(

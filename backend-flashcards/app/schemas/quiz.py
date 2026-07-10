@@ -107,6 +107,7 @@ class QuizSummary(BaseModel):
 
     id: uuid.UUID
     user_id: uuid.UUID
+    creator_name: str
     document_id: uuid.UUID | None
     title: str
     created_at: datetime
@@ -162,3 +163,15 @@ class AttemptResult(BaseModel):
     total_questions: int
     answered_count: int
     results: list[AttemptResultItem]
+
+class QuizResultItem(BaseModel):
+    """Resultado de un estudiante en un quiz (para el dueño)."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    user_id: uuid.UUID
+    student_name: str
+    score: float | None
+    status: str
+    attempted_at: datetime
+

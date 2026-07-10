@@ -12,6 +12,7 @@ from app.schemas.quiz import (
     QuizSummary,
     QuizWithAnswers,
     QuizWithoutAnswers,
+    QuizResultItem,
 )
 
 
@@ -69,6 +70,7 @@ class QuizService:
             QuizSummary(
                 id=quiz.id,
                 user_id=quiz.user_id,
+                creator_name=current_user.username or "Usuario sin nombre",
                 document_id=quiz.document_id,
                 title=quiz.title,
                 created_at=quiz.created_at,
@@ -95,17 +97,7 @@ class QuizService:
             )
 
         rows = await self.repo.list_by_organization(organization_id)
-        return [
-            QuizSummary(
-                id=quiz.id,
-                user_id=quiz.user_id,
-                document_id=quiz.document_id,
-                title=quiz.title,
-                created_at=quiz.created_at,
-                question_count=count,
-            )
-            for quiz, count in rows
-        ]
+        return [QuizSummary.model_validate(r) for r in rows]
 
 
     async def get_quiz(
@@ -170,3 +162,25 @@ class QuizService:
             answers_revealed=False,
             questions=questions,
         )
+    
+    async def get_quiz_results(
+        self, *, quiz_id: uuid.UUID, current_user: CurrentUser
+    ) -> list[QuizResultItem]:
+        """Lista los resultados de los estudiantes en un quiz.
+
+        Solo el DUEÑO del quiz puede ver los resultados.
+        """
+        quiz = await self.repo.get_quiz_with_questions(quiz_id)
+        if quiz is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="El quiz no existe.",
+            )
+        if quiz.user_id != current_user.id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Solo el dueño del quiz puede ver los resultados.",
+            )
+
+        rows = await self.repo.list_completed_attempts_with_users(quiz_id)
+        return [QuizResultItem.model_validate(r) for r in rows]
