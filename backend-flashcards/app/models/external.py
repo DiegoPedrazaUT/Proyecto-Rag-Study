@@ -36,6 +36,7 @@ class OrganizationMember(Base):
         primary_key=True,
     )
     role: Mapped[str] = mapped_column(String(50))
+    status: Mapped[str] = mapped_column(String(50))
 
 
 class Organization(Base):
@@ -43,6 +44,7 @@ class Organization(Base):
 
     id: Mapped[uuid.UUID] = mapped_column(PG_UUID(as_uuid=True), primary_key=True)
     name: Mapped[str] = mapped_column(String(255))
+    subject: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
 
 class Document(Base):
