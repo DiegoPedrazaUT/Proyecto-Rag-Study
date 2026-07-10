@@ -74,3 +74,23 @@ class DeckRepository:
         )
         result = await self.db.execute(stmt)
         return [(row[0], row[1]) for row in result.all()]
+    
+    async def list_by_organization(
+        self, organization_id: uuid.UUID
+    ) -> list[tuple[FlashcardDeck, int]]:
+        """Todos los mazos de un salón, con su conteo de tarjetas.
+
+        No filtra por creador: devuelve los mazos de cualquier miembro.
+        """
+        stmt = (
+            select(
+                FlashcardDeck,
+                func.count(Flashcard.id).label("card_count"),
+            )
+            .outerjoin(Flashcard, Flashcard.deck_id == FlashcardDeck.id)
+            .where(FlashcardDeck.organization_id == organization_id)
+            .group_by(FlashcardDeck.id)
+            .order_by(FlashcardDeck.created_at.desc())
+        )
+        result = await self.db.execute(stmt)
+        return [(row[0], row[1]) for row in result.all()]

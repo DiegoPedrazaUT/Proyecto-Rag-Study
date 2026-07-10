@@ -143,3 +143,30 @@ async def create_deck_from_document(
         payload=payload, current_user=current_user
     )
     return DeckDetail.model_validate(deck)
+
+
+@router.get(
+    "/organization/{organization_id}",
+    response_model=list[DeckWithCount],
+    summary="Listar todos los mazos de un salón",
+    responses={
+        200: {"description": "Mazos del salón (visible para cualquier miembro)."},
+        401: {"description": "Token ausente, inválido o expirado."},
+        403: {"description": "El usuario no pertenece al salón."},
+        422: {"description": "El organization_id no es un UUID válido."},
+        500: {"description": "Error interno del servidor."},
+    },
+)
+async def list_organization_decks(
+    organization_id: uuid.UUID,
+    current_user: CurrentUser = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> list[DeckWithCount]:
+    """Lista todos los mazos creados en un salón, sin importar quién los creó.
+
+    Accesible para cualquier miembro (accepted) del salón.
+    """
+    service = DeckService(db)
+    return await service.list_organization_decks(
+        organization_id=organization_id, current_user=current_user
+    )

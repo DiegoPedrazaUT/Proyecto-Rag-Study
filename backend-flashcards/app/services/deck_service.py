@@ -97,7 +97,7 @@ class DeckService:
             created_at=deck.created_at,
             cards=[FlashcardRead.model_validate(c) for c in cards],
         )
-    
+
     async def delete_deck(
         self, *, deck_id: uuid.UUID, current_user: CurrentUser
     ) -> None:
@@ -178,4 +178,35 @@ class DeckService:
         await self.repo.add(deck)
         await self.db.commit()
 
-        return await self.repo.get_deck_with_cards(deck.id)    
+        return await self.repo.get_deck_with_cards(deck.id)
+
+    async def list_organization_decks(
+        self, *, organization_id: uuid.UUID, current_user: CurrentUser
+    ) -> list[DeckWithCount]:
+        """Lista todos los mazos de un salón, visible para cualquier miembro.
+
+        El usuario debe pertenecer (accepted) al salón.
+        """
+        is_member = await self.repo.is_member(
+            user_id=current_user.id,
+            organization_id=organization_id,
+        )
+        if not is_member:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="No perteneces a este salón.",
+            )
+
+        rows = await self.repo.list_by_organization(organization_id)
+        return [
+            DeckWithCount(
+                id=deck.id,
+                user_id=deck.user_id,
+                organization_id=deck.organization_id,
+                document_id=deck.document_id,
+                title=deck.title,
+                card_count=count,
+                created_at=deck.created_at,
+            )
+            for deck, count in rows
+        ]

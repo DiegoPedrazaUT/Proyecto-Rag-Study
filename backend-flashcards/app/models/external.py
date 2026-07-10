@@ -20,6 +20,8 @@ class User(Base):
     id: Mapped[uuid.UUID] = mapped_column(PG_UUID(as_uuid=True), primary_key=True)
     email: Mapped[str] = mapped_column(String(255))
     role: Mapped[str] = mapped_column(String(50))
+    first_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    last_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
 
 class OrganizationMember(Base):

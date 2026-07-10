@@ -1,14 +1,11 @@
 import uuid
 from datetime import datetime
-
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel
 
 
 class FlashcardViewRead(BaseModel):
-    """Una vista registrada: quién vio una tarjeta y cuándo."""
-
-    model_config = ConfigDict(from_attributes=True)
+    """Una vista de flashcard, con el nombre de quien la vio."""
 
     user_id: uuid.UUID
-    flashcard_id: uuid.UUID
+    viewer_name: str
     viewed_at: datetime
