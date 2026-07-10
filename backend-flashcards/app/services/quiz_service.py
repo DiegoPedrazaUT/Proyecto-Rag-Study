@@ -113,8 +113,9 @@ class QuizService:
     ) -> QuizWithAnswers | QuizWithoutAnswers:
         """Devuelve un quiz, revelando respuestas solo si corresponde.
 
-        Se revelan si el usuario es el dueño, o si tiene al menos un intento
-        completado. En otro caso, se ocultan (regla anti-trampa).
+        Cualquier miembro (accepted) del salón del quiz puede verlo.
+        Las respuestas se revelan si el usuario es el dueño, o si tiene al
+        menos un intento completado. En otro caso, se ocultan (anti-trampa).
         """
         quiz = await self.repo.get_quiz_with_questions(quiz_id)
         if quiz is None:
@@ -123,7 +124,27 @@ class QuizService:
                 detail="El quiz no existe.",
             )
 
+        # Permiso de acceso: debe ser miembro del salón del quiz.
+        # (Los quizzes viejos sin organization_id solo los ve su dueño.)
         is_owner = quiz.user_id == current_user.id
+        if quiz.organization_id is not None:
+            is_member = await self.orgs.is_member(
+                user_id=current_user.id,
+                organization_id=quiz.organization_id,
+            )
+            if not is_member:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="No perteneces al salón de este quiz.",
+                )
+        elif not is_owner:
+            # Quiz viejo sin salón: solo el dueño puede verlo.
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="No tienes acceso a este quiz.",
+            )
+
+        # Revelar respuestas: dueño o quien ya completó un intento (anti-trampa).
         reveal = is_owner or await self.repo.has_completed_attempt(
             quiz_id=quiz_id, user_id=current_user.id
         )
