@@ -23,8 +23,7 @@ if settings.ENVIRONMENT == "development":
 origins = [
     "http://localhost:3000",
     "http://localhost:5173",
-    "https://front-ut-extracurricular-production.up.railway.app",
-    "https://api-getway-utextracurricular-production.up.railway.app"
+    "https://proyecto-rag-study-front-production.up.railway.app/",
 ]
 
 
