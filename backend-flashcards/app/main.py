@@ -1,4 +1,5 @@
 from fastapi import FastAPI
+from app.api import organizations
 
 from app.api import decks, flashcards, quizzes, views
 
@@ -17,3 +18,4 @@ app.include_router(decks.router)
 app.include_router(flashcards.router)
 app.include_router(views.router)
 app.include_router(quizzes.router)
+app.include_router(organizations.router)
