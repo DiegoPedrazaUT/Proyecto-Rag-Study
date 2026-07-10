@@ -1,10 +1,9 @@
 from fastapi import FastAPI, Depends
 from sqlalchemy.orm import Session
 from fastapi.middleware.cors import CORSMiddleware
-# Importes de la carpeta compartida 'database'
+
 from database.database import get_db, engine
 from database import models
-# Importe del enrutador de autenticación
 from api.routers import auth, users, mfa, passwords
 from core.config import settings
 
@@ -20,11 +19,34 @@ if settings.ENVIRONMENT == "development":
     models.Base.metadata.create_all(bind=engine)
 
 
-origins = [
+def normalize_origin(origin: str | None) -> str | None:
+    if not origin:
+        return None
+
+    origin = origin.strip().rstrip("/")
+
+    if not origin:
+        return None
+
+    return origin
+
+
+raw_origins = [
     "http://localhost:3000",
     "http://localhost:5173",
-    "https://proyecto-rag-study-front-production.up.railway.app/",
+
+    # Frontend actual en Railway
+    "https://proyecto-rag-study-front-production.up.railway.app",
+
+    # FRONTEND_URL desde variables de entorno
+    settings.FRONTEND_URL,
 ]
+
+origins = list({
+    origin
+    for origin in (normalize_origin(item) for item in raw_origins)
+    if origin is not None
+})
 
 
 app.add_middleware(
