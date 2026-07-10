@@ -2,6 +2,7 @@ from fastapi import HTTPException
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 from passlib.context import CryptContext
+import hashlib
 from jose import jwt, JWTError
 import pyotp
 from core.config import settings
@@ -60,3 +61,10 @@ def get_mfa_uri(email: str, secret: str) -> str:
 def verify_mfa_code(secret: str, code: str) -> bool:
     totp = pyotp.TOTP(secret)
     return totp.verify(code)
+
+def hash_token(token: str) -> str:
+    """
+    Hash determinístico para refresh tokens.
+    No usamos Argon2 aquí porque necesitamos buscar el token por hash en BD.
+    """
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()

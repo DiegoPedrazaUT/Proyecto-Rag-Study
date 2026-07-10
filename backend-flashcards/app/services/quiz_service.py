@@ -1,0 +1,105 @@
+import uuid
+
+from fastapi import HTTPException, status
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.core.security import CurrentUser
+from app.models.quizzes import Quiz, QuizQuestion
+from app.repositories.quiz_repository import QuizRepository
+from app.schemas.quiz import (
+    QuizCreate,
+    QuizSummary,
+    QuizWithAnswers,
+    QuizWithoutAnswers,
+)
+
+
+class QuizService:
+    """Lógica de negocio para quizzes."""
+
+    def __init__(self, db: AsyncSession):
+        self.db = db
+        self.repo = QuizRepository(db)
+
+    async def create_quiz(
+        self, *, payload: QuizCreate, current_user: CurrentUser
+    ) -> Quiz:
+        """Crea un quiz completo con todas sus preguntas en una operación."""
+        quiz = Quiz(
+            user_id=current_user.id,
+            document_id=payload.document_id,
+            title=payload.title,
+            questions=[
+                QuizQuestion(
+                    question=q.question,
+                    options=[o.strip() for o in q.options],
+                    correct_answer=q.correct_answer.strip(),
+                    explanation=q.explanation,
+                )
+                for q in payload.questions
+            ],
+        )
+        await self.repo.add_quiz(quiz)
+        await self.db.commit()
+
+        # Recargar con las preguntas para la respuesta (evita lazy-load async).
+        return await self.repo.get_quiz_with_questions(quiz.id)
+
+    async def list_user_quizzes(
+        self, *, current_user: CurrentUser
+    ) -> list[QuizSummary]:
+        """Lista los quizzes del usuario, con conteo de preguntas."""
+        rows = await self.repo.list_by_user(current_user.id)
+        return [
+            QuizSummary(
+                id=quiz.id,
+                user_id=quiz.user_id,
+                document_id=quiz.document_id,
+                title=quiz.title,
+                created_at=quiz.created_at,
+                question_count=count,
+            )
+            for quiz, count in rows
+        ]
+
+    async def get_quiz(
+        self, *, quiz_id: uuid.UUID, current_user: CurrentUser
+    ) -> QuizWithAnswers | QuizWithoutAnswers:
+        """Devuelve un quiz, revelando respuestas solo si corresponde.
+
+        Se revelan si el usuario es el dueño, o si tiene al menos un intento
+        completado. En otro caso, se ocultan (regla anti-trampa).
+        """
+        quiz = await self.repo.get_quiz_with_questions(quiz_id)
+        if quiz is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="El quiz no existe.",
+            )
+
+        is_owner = quiz.user_id == current_user.id
+        reveal = is_owner or await self.repo.has_completed_attempt(
+            quiz_id=quiz_id, user_id=current_user.id
+        )
+
+        questions = sorted(quiz.questions, key=lambda q: str(q.id))
+
+        if reveal:
+            return QuizWithAnswers(
+                id=quiz.id,
+                user_id=quiz.user_id,
+                document_id=quiz.document_id,
+                title=quiz.title,
+                created_at=quiz.created_at,
+                answers_revealed=True,
+                questions=questions,
+            )
+        return QuizWithoutAnswers(
+            id=quiz.id,
+            user_id=quiz.user_id,
+            document_id=quiz.document_id,
+            title=quiz.title,
+            created_at=quiz.created_at,
+            answers_revealed=False,
+            questions=questions,
+        )
