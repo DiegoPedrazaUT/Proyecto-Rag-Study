@@ -1,4 +1,5 @@
 import os
+import io
 import tempfile
 from fastapi import APIRouter, Depends, UploadFile, File, HTTPException
 from supabase import create_client, Client
@@ -12,6 +13,10 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter
 
 from app.rag.engine import llm 
 from langchain_core.messages import SystemMessage, HumanMessage
+
+from reportlab.lib.pagesizes import letter
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 
 from app.core.security import get_current_user
 from app.core.config import settings
@@ -205,32 +210,90 @@ async def update_document_metadata(
 
 
 @router.get("/{document_id}/download")
-async def download_document(
+async def download_document_as_pdf(
     document_id: str, 
     current_user: dict = Depends(get_current_user)
 ):
-    """Reconstruye el texto del documento desde los vectores y lo devuelve como archivo .txt descargable."""
+    """
+    Reconstruye el texto del documento desde la base de datos 
+    y genera dinámicamente un archivo PDF real para su descarga.
+    """
     user_id = current_user["user_id"]
     try:
+        # 1. Validar propiedad del documento en Supabase
         doc_check = supabase.table("documents").select("title").eq("id", document_id).eq("user_id", user_id).execute()
         if not doc_check.data:
             raise HTTPException(status_code=404, detail="Documento no encontrado.")
         
         doc_title = doc_check.data[0]["title"]
         
+        # 2. Traer todos los chunks de texto ordenados por su página original
         chunks_res = supabase.table("document_chunks").select("content").eq("document_id", document_id).order("page_number", desc=False).execute()
         
-        full_text = f"--- Documento: {doc_title} ---\n\n"
-        full_text += "\n\n".join([row["content"] for row in chunks_res.data])
+        if not chunks_res.data:
+            raise HTTPException(status_code=400, detail="El documento no contiene texto procesado.")
+
+        # 3. Crear un buffer de bytes en memoria RAM (evita guardar archivos basura en el disco del servidor)
+        pdf_buffer = io.BytesIO()
         
-        return Response(
-            content=full_text, 
-            media_type="text/plain", 
-            headers={"Content-Disposition": f'attachment; filename="{doc_title}_extraido.txt"'}
+        # 4. Configurar el lienzo y estructura del PDF usando ReportLab
+        doc = SimpleDocTemplate(
+            pdf_buffer, 
+            pagesize=letter,
+            rightMargin=54, leftMargin=54, topMargin=54, bottomMargin=54
         )
+        
+        # Estilos de tipografía
+        styles = getSampleStyleSheet()
+        title_style = ParagraphStyle(
+            'PDFTitle',
+            parent=styles['Heading1'],
+            fontSize=18,
+            leading=22,
+            textColor='#1a365d', # Azul institucional
+            spaceAfter=20
+        )
+        body_style = ParagraphStyle(
+            'PDFBody',
+            parent=styles['Normal'],
+            fontSize=11,
+            leading=15,
+            spaceAfter=10
+        )
+
+        # Construir la lista de elementos del documento (Story)
+        story = []
+        story.append(Paragraph(f"Documento Extraído: {doc_title}", title_style))
+        story.append(Spacer(1, 10))
+
+        # Inyectar el contenido de los chunks sanitizado
+        for row in chunks_res.data:
+            text_clean = row["content"].replace("\n", "<br/>") # Mapear saltos de línea a etiquetas ReportLab
+            story.append(Paragraph(text_clean, body_style))
+            story.append(Spacer(1, 5))
+
+        # Compilar el árbol de elementos dentro del buffer en memoria
+        doc.build(story)
+        
+        # Mover el puntero del buffer al inicio del archivo binario generado
+        pdf_buffer.seek(0)
+        pdf_data = pdf_buffer.getvalue()
+        pdf_buffer.close()
+        
+        # 5. Retornar la respuesta forzando las cabeceras binarias de PDF para el navegador de Nata
+        filename_sanitized = doc_title.replace(" ", "_")
+        return Response(
+            content=pdf_data,
+            media_type="application/pdf",
+            headers={
+                "Content-Disposition": f'attachment; filename="{filename_sanitized}_extraido.pdf"'
+            }
+        )
+        
     except Exception as e:
-        if isinstance(e, HTTPException): raise e
-        raise HTTPException(status_code=500, detail=f"Error al descargar: {str(e)}")
+        if isinstance(e, HTTPException): 
+            raise e
+        raise HTTPException(status_code=500, detail=f"Error al generar la descarga PDF: {str(e)}")
 
 
 @router.post("/v1/chunk")
