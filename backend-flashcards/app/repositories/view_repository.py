@@ -3,8 +3,8 @@ import uuid
 from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
-from app.models.external import User
 
+from app.models.external import User
 from app.models.flashcards import Flashcard, FlashcardView
 
 
@@ -64,3 +64,26 @@ class ViewRepository:
                 }
             )
         return vistas
+
+    async def list_unseen_cards(
+        self, *, deck_id: uuid.UUID, user_id: uuid.UUID
+    ) -> list[Flashcard]:
+        """Tarjetas de un mazo que el usuario aún NO ha visto.
+
+        Subconsulta: ids de tarjetas ya vistas por el usuario; se excluyen.
+        """
+        seen_subq = (
+            select(FlashcardView.flashcard_id)
+            .where(FlashcardView.user_id == user_id)
+            .scalar_subquery()
+        )
+        stmt = (
+            select(Flashcard)
+            .where(
+                Flashcard.deck_id == deck_id,
+                Flashcard.id.not_in(seen_subq),
+            )
+            .order_by(Flashcard.created_at)
+        )
+        result = await self.db.execute(stmt)
+        return list(result.scalars().all())
