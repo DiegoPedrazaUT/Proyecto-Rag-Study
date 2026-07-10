@@ -216,7 +216,7 @@ async def download_document_as_pdf(
 ):
     """
     Reconstruye el texto del documento desde la base de datos 
-    y genera dinámicamente un archivo PDF real para su descarga.
+    y genera dinámicamente un archivo PDF limpio y formateado para su descarga.
     """
     user_id = current_user["user_id"]
     try:
@@ -233,7 +233,7 @@ async def download_document_as_pdf(
         if not chunks_res.data:
             raise HTTPException(status_code=400, detail="El documento no contiene texto procesado.")
 
-        # 3. Crear un buffer de bytes en memoria RAM (evita guardar archivos basura en el disco del servidor)
+        # 3. Crear un buffer de bytes en memoria RAM
         pdf_buffer = io.BytesIO()
         
         # 4. Configurar el lienzo y estructura del PDF usando ReportLab
@@ -243,7 +243,7 @@ async def download_document_as_pdf(
             rightMargin=54, leftMargin=54, topMargin=54, bottomMargin=54
         )
         
-        # Estilos de tipografía
+        # Estilos de tipografía personalizados
         styles = getSampleStyleSheet()
         title_style = ParagraphStyle(
             'PDFTitle',
@@ -261,39 +261,49 @@ async def download_document_as_pdf(
             spaceAfter=10
         )
 
-        # Construir la lista de elementos del documento (Story)
         story = []
         story.append(Paragraph(f"Documento Extraído: {doc_title}", title_style))
         story.append(Spacer(1, 15))
 
-        # Inyectar el contenido de los chunks sanitizando los saltos de línea raros
+        # --- ALGORITMO DE AUTO-SANACIÓN DE FORMATO ---
         for row in chunks_res.data:
             text_raw = row["content"]
             
-            # --- ALGORITMO DE AUTO-SANACIÓN DE FORMATO ---
-            # 1. Reemplazamos los saltos de línea dobles por un marcador temporal único
+            # Reemplazamos los saltos de línea dobles por un marcador temporal único
             text_sanitized = text_raw.replace("\n\n", "[[PARRAFO_BREAK]]")
             
-            # 2. Los saltos de línea simples (los culpables del formato raro) los volvemos espacios
+            # Los saltos de línea simples (los culpables del formato raro) los volvemos espacios
             text_sanitized = text_sanitized.replace("\n", " ")
             
-            # 3. Limpiamos espacios dobles acumulados por el formateo anterior
+            # Limpiamos espacios dobles acumulados
             while "  " in text_sanitized:
                 text_sanitized = text_sanitized.replace("  ", " ")
                 
-            # 4. Restauramos los verdaderos saltos de párrafo usando la etiqueta HTML de ReportLab (<br/>)
+            # Restauramos los verdaderos saltos de párrafo usando la etiqueta HTML de ReportLab (<br/>)
             text_sanitized = text_sanitized.replace("[[PARRAFO_BREAK]]", "<br/><br/>")
-            # ----------------------------------------------
 
-            # Validamos que el fragmento no haya quedado vacío
             if text_sanitized.strip():
                 story.append(Paragraph(text_sanitized, body_style))
                 story.append(Spacer(1, 8))
+        # ----------------------------------------------
+
+        # --- ¡ESTAS ERAN LAS LÍNEAS QUE HACÍAN FALTA! ---
+        # Compilar el árbol de elementos dentro del buffer en memoria
+        doc.build(story)
+        
+        # Mover el puntero del buffer al inicio del archivo binario generado
+        pdf_buffer.seek(0)
+        pdf_data = pdf_buffer.getvalue() # <-- Aquí se define 'pdf_data' con éxito
+        pdf_buffer.close()
+        # ------------------------------------------------
+
+        # 5. Retornar la respuesta forzando las cabeceras binarias de PDF
+        filename_sanitized = doc_title.replace(" ", "_")
         return Response(
             content=pdf_data,
             media_type="application/pdf",
             headers={
-                "Content-Disposition": f'attachment; filename="{text_sanitized}_extraido.pdf"'
+                "Content-Disposition": f'attachment; filename="{filename_sanitized}_extraido.pdf"'
             }
         )
         
@@ -301,7 +311,7 @@ async def download_document_as_pdf(
         if isinstance(e, HTTPException): 
             raise e
         raise HTTPException(status_code=500, detail=f"Error al generar la descarga PDF: {str(e)}")
-
+        
 
 @router.post("/v1/chunk")
 async def chunk_text_utility(
