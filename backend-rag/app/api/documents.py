@@ -264,29 +264,36 @@ async def download_document_as_pdf(
         # Construir la lista de elementos del documento (Story)
         story = []
         story.append(Paragraph(f"Documento Extraído: {doc_title}", title_style))
-        story.append(Spacer(1, 10))
+        story.append(Spacer(1, 15))
 
-        # Inyectar el contenido de los chunks sanitizado
+        # Inyectar el contenido de los chunks sanitizando los saltos de línea raros
         for row in chunks_res.data:
-            text_clean = row["content"].replace("\n", "<br/>") # Mapear saltos de línea a etiquetas ReportLab
-            story.append(Paragraph(text_clean, body_style))
-            story.append(Spacer(1, 5))
+            text_raw = row["content"]
+            
+            # --- ALGORITMO DE AUTO-SANACIÓN DE FORMATO ---
+            # 1. Reemplazamos los saltos de línea dobles por un marcador temporal único
+            text_sanitized = text_raw.replace("\n\n", "[[PARRAFO_BREAK]]")
+            
+            # 2. Los saltos de línea simples (los culpables del formato raro) los volvemos espacios
+            text_sanitized = text_sanitized.replace("\n", " ")
+            
+            # 3. Limpiamos espacios dobles acumulados por el formateo anterior
+            while "  " in text_sanitized:
+                text_sanitized = text_sanitized.replace("  ", " ")
+                
+            # 4. Restauramos los verdaderos saltos de párrafo usando la etiqueta HTML de ReportLab (<br/>)
+            text_sanitized = text_sanitized.replace("[[PARRAFO_BREAK]]", "<br/><br/>")
+            # ----------------------------------------------
 
-        # Compilar el árbol de elementos dentro del buffer en memoria
-        doc.build(story)
-        
-        # Mover el puntero del buffer al inicio del archivo binario generado
-        pdf_buffer.seek(0)
-        pdf_data = pdf_buffer.getvalue()
-        pdf_buffer.close()
-        
-        # 5. Retornar la respuesta forzando las cabeceras binarias de PDF para el navegador de Nata
-        filename_sanitized = doc_title.replace(" ", "_")
+            # Validamos que el fragmento no haya quedado vacío
+            if text_sanitized.strip():
+                story.append(Paragraph(text_sanitized, body_style))
+                story.append(Spacer(1, 8))
         return Response(
             content=pdf_data,
             media_type="application/pdf",
             headers={
-                "Content-Disposition": f'attachment; filename="{filename_sanitized}_extraido.pdf"'
+                "Content-Disposition": f'attachment; filename="{text_sanitized}_extraido.pdf"'
             }
         )
         
