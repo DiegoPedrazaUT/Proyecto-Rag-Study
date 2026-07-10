@@ -12,7 +12,7 @@ LOGIN = {
     - **Seguridad**: Bloquea la cuenta por 15 minutos tras 5 intentos fallidos (Anti Fuerza-Bruta).
     """,
     "responses": {
-        200: {"description": "Login exitoso. Cookies inyectadas en el navegador."},
+        200: {"description": "Login exitoso. Cookies HttpOnly inyectadas. Devuelve datos mínimos del usuario."},
         202: {"description": "MFA requerido. Credenciales correctas, ingrese su código de 6 dígitos."},
         400: {"description": "Petición mal formada (ej. correo inválido)."},
         401: {"description": "Correo o contraseña incorrectos, o código MFA inválido/expirado."},
@@ -25,16 +25,16 @@ LOGOUT = {
     "summary": "Cerrar Sesión (Local)",
     "description": "Limpia las cookies `access_token` y `refresh_token` del navegador. Cierra la sesión únicamente de la aplicación universitaria (No cierra la cuenta global de Google del usuario).",
     "responses": {
-        200: {"description": "Sesión cerrada correctamente."}
+        200: {"description": "Borra cookies y revoca el refresh token registrado si existe."}
     }
 }
 
 REFRESH = {
     "summary": "Refrescar Token de Acceso",
-    "description": "Lee el `refresh_token` de la cookie y genera un nuevo `access_token` sin pedir credenciales, manteniendo viva la sesión del usuario.",
+    "description": "Lee el refresh_token de la cookie, valida que esté registrado en BD, lo rota y genera nuevas cookies de sesión.",
     "responses": {
-        200: {"description": "Nuevo token de acceso inyectado en cookie."},
-        401: {"description": "Refresh token inválido, no encontrado o expirado."}
+        200: {"description": "Access token y refresh token renovados correctamente."},
+        401: {"description": "Refresh token faltante, inválido, expirado, revocado o no registrado."}
     }
 }
 
@@ -68,7 +68,7 @@ COMPLETE_STUDENT = {
     "description": "Recibe el `temp_token` de seguridad, la **Matrícula** y la **Carrera**. Finaliza el registro del alumno y le inyecta sus cookies de sesión.",
     "responses": {
         200: {"description": "Perfil completado con éxito. Sesión iniciada."},
-        400: {"description": "La matrícula ya se encuentra registrada por otro alumno."},
+        400: {"description": "El correo ya está registrado, la cuenta de Google ya existe o la carrera/departamento no existe."},
         401: {"description": "El token temporal expiró o fue alterado."},
         500: {"description": "Error interno o roles base no configurados en BD."}
     }
@@ -79,8 +79,9 @@ COMPLETE_TEACHER = {
     "description": "Recibe el `temp_token` de seguridad y el **Departamento/Carrera** para finalizar el registro del profesor.",
     "responses": {
         200: {"description": "Perfil completado con éxito. Sesión iniciada."},
+        400: {"description": "El correo ya está registrado, la cuenta de Google ya existe o la carrera/departamento no existe."},
         401: {"description": "El token temporal expiró o fue alterado."},
-        500: {"description": "Error interno o roles base no configurados en BD."}
+        500: {"description": "Error interno del servidor o rol base no configurado en BD."}
     }
 }
 
@@ -160,25 +161,27 @@ PUT_ME = {
 # 5. GESTIÓN ADMINISTRATIVA (/users)
 # ==========================================
 GET_USERS = {
-    "summary": "Directorio Maestro de Usuarios",
+    "summary": "Directorio Maestro de Usuarios (Solo Admin)",
     "description": """
-    Obtiene la lista paginada de usuarios. 
-    - **Admin**: Puede ver a todos sin filtro.
-    - **Profesor**: Usará query params (`?role=student&career_id=X`) para ver solo a los alumnos de su departamento.
+    Obtiene la lista paginada de usuarios.
+    - **Admin**: Puede ver, buscar y filtrar usuarios por rol o carrera/departamento.
+    - **Usuarios normales**: No tienen acceso. Deben usar `/users/me`.
     """,
     "responses": {
-        200: {"description": "Lista de usuarios obtenida correctamente (Convierte objetos a texto limpio)."},
-        401: {"description": "No estás autenticado."}
+        200: {"description": "Lista de usuarios obtenida correctamente."},
+        401: {"description": "No estás autenticado."},
+        403: {"description": "Acceso denegado. Se requiere rol de administrador."}
     }
 }
 
 GET_USER_ID = {
-    "summary": "Ver Detalle de un Usuario",
-    "description": "Trae la información detallada de una persona por su UUID. Diseñado para vistas de Administrador o Profesor auditando un alumno.",
+    "summary": "Ver Detalle de un Usuario (Solo Admin)",
+    "description": "Trae la información detallada de una persona por UUID. Exclusivo para administradores.",
     "responses": {
         200: {"description": "Detalle del usuario obtenido correctamente."},
         401: {"description": "No estás autenticado."},
-        404: {"description": "Usuario no encontrado (Error de UUID)."}
+        403: {"description": "Acceso denegado. Se requiere rol de administrador."},
+        404: {"description": "Usuario no encontrado."}
     }
 }
 
@@ -220,7 +223,7 @@ DELETE_USER_ADMIN = {
 # ==========================================
 MFA_SETUP = {
     "summary": "Configurar Google Authenticator",
-    "description": "Genera el Secreto (semilla) y la URI para que el Frontend genere el Código QR que el usuario escaneará.",
+    "description": "Genera el secreto MFA para el usuario autenticado. No acepta user_id externo.",
     "responses": {
         200: {"description": "URI del QR y semilla generadas exitosamente."},
         400: {"description": "El MFA ya está activo en esta cuenta (Evita sobrescritura)."},
@@ -230,7 +233,7 @@ MFA_SETUP = {
 
 MFA_VERIFY = {
     "summary": "Verificar y Activar MFA",
-    "description": "Recibe el código temporal de 6 dígitos. Si es correcto, el candado de doble factor se activa permanentemente.",
+    "description": "Verifica el código temporal de 6 dígitos para el usuario autenticado y activa MFA.",
     "responses": {
         200: {"description": "MFA activado exitosamente."},
         400: {"description": "MFA no está en proceso de configuración."},

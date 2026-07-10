@@ -1,6 +1,7 @@
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
-from database.models import User, StudentProfile, TeacherProfile, Role
+from database.models import User, StudentProfile, TeacherProfile, Role, RefreshToken
+from datetime import datetime, timezone
 from typing import Optional
 
 class UserRepository:
@@ -74,4 +75,43 @@ class UserRepository:
     @staticmethod
     def delete_user(db: Session, user: User) -> None:
         db.delete(user)
+        db.commit()
+    
+    @staticmethod
+    def get_by_google_id(db: Session, google_id: str) -> Optional[User]:
+        return db.query(User).filter(User.google_id == google_id).first()
+
+        
+class RefreshTokenRepository:
+    @staticmethod
+    def create(db: Session, user_id: str, token_hash: str, expires_at: datetime) -> RefreshToken:
+        refresh_token = RefreshToken(
+            user_id=user_id,
+            token=token_hash,
+            expires_at=expires_at
+        )
+        db.add(refresh_token)
+        db.commit()
+        db.refresh(refresh_token)
+        return refresh_token
+
+    @staticmethod
+    def get_valid_by_hash(db: Session, token_hash: str) -> Optional[RefreshToken]:
+        return db.query(RefreshToken).filter(
+            RefreshToken.token == token_hash,
+            RefreshToken.expires_at > datetime.now(timezone.utc)
+        ).first()
+
+    @staticmethod
+    def delete_by_hash(db: Session, token_hash: str) -> None:
+        db.query(RefreshToken).filter(
+            RefreshToken.token == token_hash
+        ).delete(synchronize_session=False)
+        db.commit()
+
+    @staticmethod
+    def delete_all_for_user(db: Session, user_id: str) -> None:
+        db.query(RefreshToken).filter(
+            RefreshToken.user_id == user_id
+        ).delete(synchronize_session=False)
         db.commit()

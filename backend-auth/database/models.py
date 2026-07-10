@@ -53,6 +53,8 @@ class User(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     role = relationship("Role")
+    student_profile = relationship("StudentProfile", back_populates="user", uselist=False)
+    teacher_profile = relationship("TeacherProfile", back_populates="user", uselist=False)
 
 class RefreshToken(Base):
     __tablename__ = "refresh_tokens"
@@ -72,11 +74,15 @@ class StudentProfile(Base):
     matricula = Column(String(50), unique=True, nullable=False)
     career_id = Column(Integer, ForeignKey("careers.career_id", ondelete="RESTRICT"))
 
+    user = relationship("User", back_populates="student_profile")
+
 class TeacherProfile(Base):
     __tablename__ = "teacher_profiles"
     profile_id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), unique=True)
     career_id = Column(Integer, ForeignKey("careers.career_id", ondelete="RESTRICT"))
+
+    user = relationship("User", back_populates="teacher_profile")
 
 # ==========================================
 # 4. ORGANIZACIONES E INVITACIONES
